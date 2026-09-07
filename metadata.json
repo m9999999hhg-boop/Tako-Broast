@@ -1,6 +1,6 @@
 {
   "name": "Taco Broast",
-  "description": "Unified restaurant management and ordering system for Taco Broast | تاكو بروست - featuring real-time sync across Website, POS Cashier, Kitchen Display, Delivery Live GPS, and Admin Portal.",
+  "description": "Unified restaurant management and ordering system for Taco Broast | تاكو بروست - featuring real-time sync across Customer Website, POS Cashier, Delivery Live GPS Tracking, and Admin Portal.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

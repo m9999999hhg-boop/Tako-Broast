@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "orders": {
+      "title": "Orders",
+      "description": "Store and online customer orders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "orderType": { "type": "string" },
+        "status": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "deliveryAddress": { "type": "string" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "deliveryFee": { "type": "number" },
+        "tax": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentStatus": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "cashierName": { "type": "string" },
+        "driverId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "printedCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "orderNumber", "orderType", "status", "total", "createdAt"]
+    },
+    "products": {
+      "title": "Products",
+      "description": "Menu meals and items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "price": { "type": "number" },
+        "categoryId": { "type": "string" },
+        "isAvailable": { "type": "boolean" },
+        "hasSpicyOption": { "type": "boolean" },
+        "descriptionAr": { "type": "string" }
+      },
+      "required": ["id", "nameAr", "price", "isAvailable"]
+    },
+    "categories": {
+      "title": "Categories",
+      "description": "Food menu categories",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "icon": { "type": "string" }
+      },
+      "required": ["id", "nameAr"]
+    },
+    "users": {
+      "title": "Staff Users",
+      "description": "Restaurant staff accounts with roles and permissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "role", "active"]
+    },
+    "activityLogs": {
+      "title": "Activity Logs",
+      "description": "Audit trail of staff operations and system events without exposing passwords or sensitive credentials",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "actorName": { "type": "string" },
+        "role": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "actorName", "role", "action", "details", "timestamp"]
+    },
+    "customers": {
+      "title": "Customers",
+      "description": "Registered and walk-in customer directory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "totalOrders": { "type": "number" },
+        "totalSpent": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "phone"]
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Restaurant branch details and operational configurations",
+      "type": "object",
+      "properties": {
+        "restaurantNameAr": { "type": "string" },
+        "hotline": { "type": "string" },
+        "autoPrintEnabled": { "type": "boolean" },
+        "audioAlertsEnabled": { "type": "boolean" },
+        "taxRate": { "type": "number" },
+        "defaultDeliveryFee": { "type": "number" }
+      }
+    }
+  }
+}

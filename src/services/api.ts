@@ -12,6 +12,7 @@ import {
   ActivityLog,
   RestaurantSettings,
   WhatsAppTemplate,
+  User,
 } from '../types';
 
 const BASE_URL = '/api';

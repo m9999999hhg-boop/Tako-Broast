@@ -36,6 +36,8 @@ export const PosView: React.FC = () => {
     currentUser,
     settings,
     triggerManualPrint,
+    isCashierAutoPrint,
+    setIsCashierAutoPrint,
   } = useApp();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -224,12 +226,18 @@ export const PosView: React.FC = () => {
             <MapPin className="w-3.5 h-3.5 text-[#FF6321]" />
             <span className="font-bold text-slate-700">{settings?.addressAr || 'ش السنترال بجوار فرن العمده - شبرا النخلة'}</span>
           </div>
-          {settings?.autoPrintEnabled && (
-            <span className="bg-emerald-50 text-emerald-700 text-[11px] font-bold px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
-              <Printer className="w-3 h-3 text-emerald-600" />
-              الطباعة التلقائية مفعلة (80mm)
-            </span>
-          )}
+          <button
+            onClick={() => setIsCashierAutoPrint(!isCashierAutoPrint)}
+            className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition cursor-pointer ${
+              isCashierAutoPrint
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-2xs'
+                : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+            }`}
+            title="انقر لتفعيل أو إيقاف الطباعة التلقائية المباشرة عند وصول الطلبات للكاشير"
+          >
+            <Printer className={`w-3.5 h-3.5 ${isCashierAutoPrint ? 'text-emerald-600 animate-pulse' : 'text-amber-600'}`} />
+            <span>طباعة فورية للكاشير: {isCashierAutoPrint ? 'مفعلة تلقائياً (80mm)' : 'متوقفة'}</span>
+          </button>
         </div>
 
         {/* Order Type Tabs */}

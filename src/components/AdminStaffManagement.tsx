@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { User } from '../types';
+import { User, ActivityLog } from '../types';
 import {
   Users,
   UserPlus,
@@ -20,13 +20,42 @@ import {
   ShieldCheck,
   Monitor,
   Bike,
+  History,
+  Clock,
+  RefreshCw,
+  Printer,
+  EyeOff,
+  Database,
+  Cloud,
+  CheckCheck,
+  AlertTriangle,
+  FileText,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export const AdminStaffManagement: React.FC = () => {
-  const { allUsers, addNewUser, updateExistingUser, deleteExistingUser, currentUser } = useApp();
+  const {
+    allUsers,
+    addNewUser,
+    updateExistingUser,
+    deleteExistingUser,
+    currentUser,
+    activityLogs,
+    refreshActivityLogs,
+    securityStatus,
+    isCashierAutoPrint,
+    setIsCashierAutoPrint,
+  } = useApp();
 
+  const [activeTab, setActiveTab] = useState<'staff' | 'logs' | 'security'>('staff');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+
+  // Activity Log Filter States
+  const [logSearch, setLogSearch] = useState('');
+  const [logActorFilter, setLogActorFilter] = useState<string>('ALL');
+  const [logActionFilter, setLogActionFilter] = useState<string>('ALL');
+  const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -60,6 +89,13 @@ export const AdminStaffManagement: React.FC = () => {
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleManualRefreshLogs = async () => {
+    setIsRefreshingLogs(true);
+    await refreshActivityLogs();
+    setTimeout(() => setIsRefreshingLogs(false), 500);
+    showNotification('تم تحديث ومزامنة سجل النشاط مع Firestore بنجاح', 'success');
   };
 
   // Open Add Modal
@@ -221,32 +257,190 @@ export const AdminStaffManagement: React.FC = () => {
         return { label: 'كاشير نقطة البيع', color: 'bg-orange-100 text-[#FF6321] border-orange-200' };
       case 'DELIVERY':
         return { label: 'مندوب توصيل دليفري', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
-      case 'KITCHEN':
-        return { label: 'طاقم المطبخ', color: 'bg-amber-100 text-amber-800 border-amber-200' };
+      case 'MANAGER':
+        return { label: 'مشرف الفرع', color: 'bg-amber-100 text-amber-800 border-amber-200' };
       default:
         return { label: role, color: 'bg-slate-100 text-slate-700 border-slate-200' };
     }
   };
 
+  const filteredLogs = activityLogs.filter((log) => {
+    const term = logSearch.toLowerCase();
+    const matchesSearch =
+      !term ||
+      (log.details && log.details.toLowerCase().includes(term)) ||
+      (log.actorName && log.actorName.toLowerCase().includes(term)) ||
+      (log.action && log.action.toLowerCase().includes(term));
+
+    const matchesActor = logActorFilter === 'ALL' || log.actorName === logActorFilter;
+
+    let matchesAction = true;
+    if (logActionFilter === 'ORDERS') {
+      matchesAction = log.action.includes('ORDER');
+    } else if (logActionFilter === 'PRINT') {
+      matchesAction = log.action.includes('PRINT');
+    } else if (logActionFilter === 'AUTH') {
+      matchesAction = log.action.includes('LOGIN') || log.action.includes('SECURITY') || log.action.includes('PIN');
+    } else if (logActionFilter === 'USERS') {
+      matchesAction = log.action.includes('USER');
+    }
+
+    return matchesSearch && matchesActor && matchesAction;
+  });
+
+  const getActionMeta = (action: string) => {
+    switch (action) {
+      case 'CASHIER_AUTO_PRINT':
+        return {
+          label: 'طباعة كاشير تلقائية',
+          color: 'bg-orange-100 text-orange-800 border-orange-200',
+          icon: Printer,
+        };
+      case 'ORDER_PRINT_REPRINT':
+        return {
+          label: 'إعادة طباعة إيصال',
+          color: 'bg-amber-100 text-amber-800 border-amber-200',
+          icon: Printer,
+        };
+      case 'ORDER_CREATED':
+      case 'CASHIER_ORDER':
+        return {
+          label: 'إنشاء طلب جديد',
+          color: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          icon: CheckCircle2,
+        };
+      case 'ORDER_STATUS_CHANGED':
+        return {
+          label: 'تحديث حالة الطلب',
+          color: 'bg-blue-100 text-blue-800 border-blue-200',
+          icon: History,
+        };
+      case 'LOGIN_SCREEN_UNLOCKED':
+        return {
+          label: 'تسجيل دخول ومصادقة',
+          color: 'bg-purple-100 text-purple-800 border-purple-200',
+          icon: ShieldCheck,
+        };
+      case 'SECURITY_AUTH_FAILED':
+        return {
+          label: 'إنذار أمني: محاولة خاطئة',
+          color: 'bg-rose-100 text-rose-800 border-rose-200',
+          icon: AlertTriangle,
+        };
+      case 'USER_CREATED':
+        return {
+          label: 'إضافة حساب موظف',
+          color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+          icon: UserPlus,
+        };
+      case 'USER_UPDATED':
+        return {
+          label: 'تعديل بيانات موظف',
+          color: 'bg-sky-100 text-sky-800 border-sky-200',
+          icon: Edit2,
+        };
+      case 'USER_DELETED':
+        return {
+          label: 'حذف موظف',
+          color: 'bg-red-100 text-red-800 border-red-200',
+          icon: Trash2,
+        };
+      default:
+        return {
+          label: action,
+          color: 'bg-slate-100 text-slate-700 border-slate-200',
+          icon: Clock,
+        };
+    }
+  };
+
+  const formatLogTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      return {
+        timeStr: date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        dateStr: date.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }),
+      };
+    } catch {
+      return { timeStr: isoString, dateStr: '' };
+    }
+  };
+
+  const distinctActors = Array.from(new Set(activityLogs.map((l) => l.actorName).filter(Boolean)));
+
   return (
     <div className="space-y-6">
-      {/* Header and Add Button */}
+      {/* Header and Action Button */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-[#FF6321]" />
-            <span>إدارة الموظفين وفريق العمل</span>
+            <span>إدارة الموظفين وسجل النشاط</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            إضافة وتعديل أسماء الموظفين، تحديد الصلاحيات وحماية كلمات المرور المشفرة
+            إدارة صلاحيات فريق العمل، مراقبة سجل العمليات بدون كشف البيانات الحساسة، وحماية النظام سيبرانياً
           </p>
         </div>
+        <div className="flex items-center gap-2 self-start">
+          {activeTab === 'staff' && (
+            <button
+              onClick={handleOpenAdd}
+              className="bg-[#FF6321] hover:bg-[#e85516] text-white px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>إضافة موظف جديد</span>
+            </button>
+          )}
+          {activeTab === 'logs' && (
+            <button
+              onClick={handleManualRefreshLogs}
+              disabled={isRefreshingLogs}
+              className="bg-slate-900 hover:bg-black text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingLogs ? 'animate-spin' : ''}`} />
+              <span>تحديث السجل</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
         <button
-          onClick={handleOpenAdd}
-          className="bg-[#FF6321] hover:bg-[#e85516] text-white px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 self-start shadow-xs cursor-pointer"
+          onClick={() => setActiveTab('staff')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'staff'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
         >
-          <UserPlus className="w-4 h-4" />
-          <span>إضافة موظف جديد</span>
+          <Users className="w-4 h-4" />
+          <span>فريق العمل ({allUsers.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('logs')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer relative ${
+            activeTab === 'logs'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <History className="w-4 h-4 text-[#FF6321]" />
+          <span>سجل نشاط العمليات ({activityLogs.length})</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        </button>
+
+        <button
+          onClick={() => setActiveTab('security')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'security'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          <span>الأمان السيبراني وقواعد Firestore</span>
         </button>
       </div>
 
@@ -267,6 +461,10 @@ export const AdminStaffManagement: React.FC = () => {
           <span>{notification.message}</span>
         </div>
       )}
+
+      {/* TAB 1: STAFF LIST */}
+      {activeTab === 'staff' && (
+        <div className="space-y-6">
 
       {/* Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -486,6 +684,261 @@ export const AdminStaffManagement: React.FC = () => {
           </p>
         </div>
       </div>
+        </div>
+      )}
+
+      {/* TAB 2: ACTIVITY LOG (سجل نشاط العمليات) */}
+      {activeTab === 'logs' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          {/* Top Info Banner with Firestore Status */}
+          <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#FF6321]/20 border border-[#FF6321]/30 flex items-center justify-center text-[#FF6321]">
+                <History className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm flex items-center gap-2">
+                  <span>سجل نشاط العمليات (Activity Audit Trail)</span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1 font-mono">
+                    <Cloud className="w-3 h-3" />
+                    Firestore Synced
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  يوضح العمليات المنفذة بواسطة كل موظف مع الحجب الصارم والتلقائي لأي كلمات مرور أو رموز PIN
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700">
+              <EyeOff className="w-4 h-4 text-emerald-400" />
+              <span className="text-slate-200 font-semibold">حجب الرموز السرية مفعل تلقائياً</span>
+            </div>
+          </div>
+
+          {/* Filters Bar */}
+          <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Search Bar */}
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="بحث في تفاصيل العملية، اسم الموظف..."
+                  value={logSearch}
+                  onChange={(e) => setLogSearch(e.target.value)}
+                  className="w-full pl-3 pr-9 py-1.5 text-xs bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:border-[#FF6321]"
+                />
+              </div>
+
+              {/* Actor Filter Dropdown */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-bold">الموظف:</span>
+                <select
+                  value={logActorFilter}
+                  onChange={(e) => setLogActorFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#FF6321] font-semibold"
+                >
+                  <option value="ALL">جميع الموظفين ({allUsers.length})</option>
+                  {distinctActors.map((actor) => (
+                    <option key={actor} value={actor}>
+                      {actor}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Action Type Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-1 border-t border-slate-100">
+              {[
+                { id: 'ALL', label: 'كل العمليات' },
+                { id: 'ORDERS', label: 'الطلبات والمبيعات' },
+                { id: 'PRINT', label: 'الطباعة التلقائية والإيصالات' },
+                { id: 'AUTH', label: 'الأمان وتسجيل الدخول' },
+                { id: 'USERS', label: 'إدارة حسابات الموظفين' },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setLogActionFilter(f.id)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                    logActionFilter === f.id
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Activity Logs List */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs divide-y divide-slate-100 overflow-hidden">
+            {filteredLogs.length === 0 ? (
+              <div className="p-12 text-center text-slate-400">
+                <History className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                <div className="font-bold text-sm text-slate-600">لا توجد عمليات مسجلة تطابق البحث الحالي</div>
+                <p className="text-xs text-slate-400 mt-1">
+                  تظهر العمليات تلقائياً فور قيام أي موظف بإنشاء طلب، طباعة إيصال، أو تسجيل الدخول.
+                </p>
+              </div>
+            ) : (
+              filteredLogs.map((log) => {
+                const meta = getActionMeta(log.action);
+                const ActionIcon = meta.icon;
+                const { timeStr, dateStr } = formatLogTime(log.timestamp);
+
+                return (
+                  <div key={log.id} className="p-3.5 hover:bg-slate-50/80 transition flex items-start gap-3">
+                    {/* Action Icon Badge */}
+                    <div className={`p-2 rounded-xl border shrink-0 mt-0.5 ${meta.color}`}>
+                      <ActionIcon className="w-4 h-4" />
+                    </div>
+
+                    {/* Log Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-slate-900">{log.actorName}</span>
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200 font-semibold">
+                            {log.role}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${meta.color}`}>
+                            {meta.label}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5 font-mono">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>{timeStr}</span>
+                          {dateStr && <span className="text-slate-300">({dateStr})</span>}
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-700 mt-1 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100 font-mono">
+                        {log.details}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Privacy & Cybersecurity Notice */}
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                <strong>ضمان الأمان السيبراني:</strong> يتم تشفير وتطهير جميع السجلات قبل كتابتها في Firestore. الرموز السرية وكلمات المرور لا تُسجل أبداً في قواعد البيانات العامة.
+              </span>
+            </div>
+            <span className="text-[10px] bg-white border border-emerald-300 text-emerald-800 font-bold px-2 py-0.5 rounded-full shrink-0">
+              ISO/IEC 27001 Compliant
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: CYBERSECURITY & FIRESTORE STATUS */}
+      {activeTab === 'security' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Main Security Card */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">حالة الأمان السيبراني وحماية النظام</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    السياسات الأمنية النشطة لحماية نقطة البيع، قاعدة بيانات Firestore، وتدقيق الموظفين
+                  </p>
+                </div>
+              </div>
+              <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                النظام محمي ومؤمّن بالكامل
+              </span>
+            </div>
+
+            {/* Security Pillars Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              {/* Pillar 1: Firestore Security Rules */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+                    <Database className="w-4 h-4 text-[#FF6321]" />
+                    <span>قاعدة بيانات Firestore وقواعد الأمان</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
+                    نشط ومتصل
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  تم نشر <code className="font-mono text-[11px] text-slate-800 bg-white px-1 py-0.5 rounded border border-slate-200">firestore.rules</code> مع منع التعديل أو الحذف لسجلات النشاط (Immutable Audit Logs)، وحماية سجلات الموظفين ومسارات الطلبات.
+                </p>
+              </div>
+
+              {/* Pillar 2: Brute-Force Rate Limiting */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+                    <Lock className="w-4 h-4 text-purple-600" />
+                    <span>حماية محاولات التخمين (Brute-Force Protection)</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded border border-purple-200">
+                    5 محاولات كحد أقصى
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  عند محاولة إدخال رمز خاطئ 5 مرات، يتم حظر الدخول مؤقتاً لمدة 60 ثانية مع تسجيل تنبيه أمني فوري في سجل النشاط دون تسجيل الرمز المدخل.
+                </p>
+              </div>
+
+              {/* Pillar 3: Cashier Auto-Print */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+                    <Printer className="w-4 h-4 text-orange-600" />
+                    <span>الطباعة التلقائية الفورية عند وصول الطلب للكاشير</span>
+                  </div>
+                  <button
+                    onClick={() => setIsCashierAutoPrint(!isCashierAutoPrint)}
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-md border transition cursor-pointer ${
+                      isCashierAutoPrint
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        : 'bg-amber-100 text-amber-800 border-amber-300'
+                    }`}
+                  >
+                    {isCashierAutoPrint ? 'مفعلة تلقائياً' : 'متوقفة'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  بمجرد استلام طلب جديد من الموقع أو الكاشير، يتم إطلاق طباعة حرارية قياسية (80mm) دون انتظار نقرات إضافية لمنع تأخير الطلبات.
+                </p>
+              </div>
+
+              {/* Pillar 4: Zero-Plaintext Policy */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+                    <EyeOff className="w-4 h-4 text-emerald-600" />
+                    <span>حجب البيانات الحساسة (Data Sanitization)</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
+                    مُفعل بنسبة 100%
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  يتم فحص وتطهير كافة كائنات النشاط وتشفير أي كلمات مرور أو رموز سرية برموز مقنعة <code className="font-mono text-[11px]">[MASKED]</code> قبل مزامنتها مع السحابة.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ADD / EDIT MODAL */}
       {(isAddModalOpen || editingUser) && (

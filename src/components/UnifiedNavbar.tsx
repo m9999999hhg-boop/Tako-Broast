@@ -142,10 +142,14 @@ export const UnifiedNavbar: React.FC<{ onOpenCart?: () => void }> = ({ onOpenCar
                 <Flame className="w-3.5 h-3.5 text-rose-500" />
                 <span>عروض التوفير</span>
               </a>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500">
-                <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                <span>شبرا النخلة - بجوار فرن العمدة</span>
-              </div>
+              <a
+                href="#restaurant-gps"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 hover:text-[#FF6321] hover:bg-slate-50 transition border border-transparent hover:border-slate-200"
+                title="عرض خريطة الفرع وإحداثيات GPS"
+              >
+                <MapPin className="w-3.5 h-3.5 text-[#FF6321]" />
+                <span>موقعنا على GPS (شبرا النخلة)</span>
+              </a>
             </nav>
 
             {/* Right side buttons for customer website */}

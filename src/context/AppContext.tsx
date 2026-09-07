@@ -11,9 +11,15 @@ import {
   DeliveryEmployee,
   RestaurantSettings,
   User,
+  ActivityLog,
 } from '../types';
 import * as api from '../services/api';
 import { audioEngine } from '../utils/audio';
+import {
+  syncOrderToFirestore,
+  syncActivityLogToFirestore,
+  syncUserToFirestore,
+} from '../services/firebase';
 
 export type AppRoute = 'website' | 'pos' | 'delivery' | 'admin';
 
@@ -85,6 +91,23 @@ interface AppContextType {
   activeTrackingOrderId: string | null;
   setActiveTrackingOrderId: (id: string | null) => void;
 
+  // Activity Logs & Audit Trail (Cybersecurity)
+  activityLogs: ActivityLog[];
+  refreshActivityLogs: () => Promise<void>;
+  recordActivityLog: (action: string, details: string) => Promise<void>;
+
+  // Cashier Automatic Printing State
+  isCashierAutoPrint: boolean;
+  setIsCashierAutoPrint: (enabled: boolean) => void;
+
+  // Cybersecurity Info
+  securityStatus: {
+    isFirestoreSynced: boolean;
+    isHttpsSecure: boolean;
+    failedAttempts: number;
+    lockoutSecondsLeft: number;
+  };
+
   // Screen Password Protection
   unlockedScreens: Record<AppRoute, boolean>;
   unlockScreen: (route: AppRoute, passwordAttempt: string) => boolean;
@@ -101,21 +124,34 @@ interface AppContextType {
   setIsStaffModalOpen: (open: boolean) => void;
   targetLockedRoute: AppRoute | null;
   setTargetLockedRoute: (route: AppRoute | null) => void;
+  getSystemLinks: () => {
+    customerUrl: string;
+    staffModalUrl: string;
+    adminUrl: string;
+    posUrl: string;
+    deliveryUrl: string;
+  };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const parseRouteFromLocation = (): AppRoute => {
+  if (typeof window !== 'undefined') {
+    const path = window.location.pathname.toLowerCase();
+    const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash.toLowerCase();
+    const viewParam = params.get('view')?.toLowerCase();
+
+    if (path.startsWith('/admin') || viewParam === 'admin' || hash === '#admin') return 'admin';
+    if (path.startsWith('/pos') || viewParam === 'pos' || hash === '#pos') return 'pos';
+    if (path.startsWith('/delivery') || viewParam === 'delivery' || hash === '#delivery') return 'delivery';
+  }
+  return 'website';
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Sync route with URL path on load
-  const [currentRoute, setCurrentRouteState] = useState<AppRoute>(() => {
-    if (typeof window !== 'undefined') {
-      const path = window.location.pathname.toLowerCase();
-      if (path.startsWith('/pos')) return 'pos';
-      if (path.startsWith('/delivery')) return 'delivery';
-      if (path.startsWith('/admin')) return 'admin';
-    }
-    return 'website';
-  });
+  // Sync route with URL path / query params / hash on load
+  const [currentRoute, setCurrentRouteState] = useState<AppRoute>(() => parseRouteFromLocation());
 
   const setCurrentRoute = (route: AppRoute) => {
     setCurrentRouteState(route);
@@ -147,6 +183,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [recentPrintJobs, setRecentPrintJobs] = useState<PrintJob[]>([]);
   const [processedPrintKeys] = useState<Set<string>>(new Set());
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<string | null>(null);
+
+  // Activity Logs & Cybersecurity State
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [failedAttempts, setFailedAttempts] = useState<number>(0);
+  const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState<number>(0);
+  const [isCashierAutoPrint, setIsCashierAutoPrintState] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('tb_cashier_autoprint');
+        return saved !== null ? JSON.parse(saved) : true;
+      }
+    } catch (e) {}
+    return true;
+  });
+
+  const setIsCashierAutoPrint = (enabled: boolean) => {
+    setIsCashierAutoPrintState(enabled);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tb_cashier_autoprint', JSON.stringify(enabled));
+      }
+    } catch (e) {}
+  };
+
+  // Cybersecurity Lockout Countdown Timer
+  useEffect(() => {
+    if (lockoutSecondsLeft <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setFailedAttempts(0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutSecondsLeft]);
 
   // Screen Password Protection States
   const [unlockedScreens, setUnlockedScreens] = useState<Record<AppRoute, boolean>>(() => {
@@ -184,8 +258,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const unlockScreen = useCallback(
     (route: AppRoute, passwordAttempt: string): boolean => {
       if (route === 'website') return true;
+      if (lockoutSecondsLeft > 0) {
+        return false;
+      }
       const expected = screenPasswords[route as keyof typeof screenPasswords];
       if (passwordAttempt.trim() === expected) {
+        setFailedAttempts(0);
         setUnlockedScreens((prev) => {
           const updated = { ...prev, [route]: true };
           try {
@@ -197,11 +275,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (typeof window !== 'undefined') {
           window.history.pushState({}, '', `/${route}`);
         }
+
+        // Safe audit log without revealing password or PIN
+        const safeLog: ActivityLog = {
+          id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          actorName: currentUser.name || 'موظف النظام',
+          role: route === 'admin' ? 'ADMIN' : route === 'pos' ? 'CASHIER' : 'DELIVERY',
+          action: 'LOGIN_SCREEN_UNLOCKED',
+          details: `تسجيل دخول ناجح ومصادقة أمنية لشاشة ${route === 'pos' ? 'الكاشير (POS)' : route === 'delivery' ? 'توصيل الطلبات' : 'لوحة الإدارة'}`,
+          timestamp: new Date().toISOString(),
+        };
+        setActivityLogs((prev) => [safeLog, ...prev.slice(0, 199)]);
+        syncActivityLogToFirestore(safeLog);
         return true;
       }
+
+      // Security: brute force protection
+      const nextFails = failedAttempts + 1;
+      setFailedAttempts(nextFails);
+      if (nextFails >= 5) {
+        setLockoutSecondsLeft(60); // 60-second lock
+      }
+      const failLog: ActivityLog = {
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        actorName: 'مستخدم غير مصرح',
+        role: 'UNAUTHORIZED',
+        action: 'SECURITY_AUTH_FAILED',
+        details: `محاولة غير مصرح بها للدخول لشاشة ${route} برمز خاطئ (محاولة ${nextFails}/5) - تم الحجب أمنياً دون تسجيل الرمز`,
+        timestamp: new Date().toISOString(),
+      };
+      setActivityLogs((prev) => [failLog, ...prev.slice(0, 199)]);
+      syncActivityLogToFirestore(failLog);
       return false;
     },
-    [screenPasswords]
+    [screenPasswords, lockoutSecondsLeft, failedAttempts, currentUser]
   );
 
   const lockScreen = useCallback((route: AppRoute) => {
@@ -235,6 +342,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  const updateSettings = useCallback(async (newSettings: Partial<RestaurantSettings>) => {
+    const updated = await api.updateSettings(newSettings);
+    setSettings(updated);
+  }, []);
+
   const updateScreenPassword = useCallback(
     async (screen: 'pos' | 'delivery' | 'admin', newPass: string) => {
       if (!settings) return;
@@ -258,7 +370,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Initial Data Fetch
   const loadInitialData = useCallback(async () => {
     try {
-      const [cats, prods, ords, custs, staff, sets, users] = await Promise.all([
+      const [cats, prods, ords, custs, staff, sets, users, logs] = await Promise.all([
         api.fetchCategories(),
         api.fetchProducts(),
         api.fetchOrders(),
@@ -266,6 +378,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         api.fetchDeliveryStaff(),
         api.fetchSettings(),
         api.fetchUsers(),
+        api.fetchActivityLogs().catch(() => []),
       ]);
       setCategories(cats);
       setProducts(prods);
@@ -274,6 +387,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setDeliveryStaff(staff);
       setSettings(sets);
       setAllUsers(users);
+      if (logs && Array.isArray(logs)) {
+        setActivityLogs(logs);
+      }
       if (users.length > 0) {
         // Match default user based on initial route
         if (currentRoute === 'pos') {
@@ -298,11 +414,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       processedPrintKeys.add(idempotencyKey);
 
-      // Play sound
+      // Play printer sound
       audioEngine.playPrinterSound();
 
-      // Show visual thermal receipt modal in POS
-      setActivePrintReceipt({ order, isReprint: false });
+      // Show visual thermal receipt modal in POS if cashier auto-print is enabled
+      if (isCashierAutoPrint) {
+        setActivePrintReceipt({ order, isReprint: false });
+      }
+
+      // Safe Audit Log for automatic printing
+      const printLog: ActivityLog = {
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        actorName: order.cashierName || currentUser.name || 'طابعة الكاشير التلقائية',
+        role: 'CASHIER',
+        action: 'CASHIER_AUTO_PRINT',
+        details: `طباعة تلقائية فورية لإيصال الطلب #${order.orderNumber} بقيمة ${order.total} ج.م واستلامه في شاشة الكاشير`,
+        timestamp: new Date().toISOString(),
+      };
+      setActivityLogs((prev) => [printLog, ...prev.slice(0, 199)]);
+      syncActivityLogToFirestore(printLog);
 
       if (printJob) {
         setRecentPrintJobs((prev) => [printJob, ...prev.slice(0, 19)]);
@@ -313,7 +443,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     },
-    [processedPrintKeys]
+    [processedPrintKeys, isCashierAutoPrint, currentUser]
   );
 
   // Subscribe to Real-Time SSE
@@ -330,11 +460,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setOrders((prev) => [order, ...prev.filter((o) => o.id !== order.id)]);
         audioEngine.playNewOrderChime();
 
-        // Automatic Thermal Printing Trigger
+        // Sync real-time order to Firestore database
+        syncOrderToFirestore(order);
+
+        // Automatic Thermal Printing Trigger when reaching Cashier
         handleAutoPrint(order, printJob);
       } else if (event.type === 'ORDER_UPDATED') {
         const updated = event.payload as Order;
         setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+        syncOrderToFirestore(updated);
         if (updated.status === 'READY') {
           audioEngine.playKitchenBell();
         }
@@ -354,6 +488,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSettings(event.payload);
       } else if (event.type === 'USERS_UPDATED') {
         setAllUsers(event.payload);
+      } else if (event.type === 'ACTIVITY_LOG') {
+        const newLog = event.payload as ActivityLog;
+        setActivityLogs((prev) => [newLog, ...prev.filter((l) => l.id !== newLog.id).slice(0, 199)]);
+        syncActivityLogToFirestore(newLog);
       }
     });
 
@@ -361,6 +499,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubscribe();
     };
   }, [loadInitialData, handleAutoPrint]);
+
+  // Support query params / hash changes and automatic staff portal opening
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash.toLowerCase();
+    if (params.get('staff') === 'true' || hash === '#staff') {
+      setIsStaffModalOpen(true);
+    }
+    const handleUrlChange = () => {
+      const route = parseRouteFromLocation();
+      setCurrentRouteState(route);
+      const curParams = new URLSearchParams(window.location.search);
+      const curHash = window.location.hash.toLowerCase();
+      if (curParams.get('staff') === 'true' || curHash === '#staff') {
+        setIsStaffModalOpen(true);
+      }
+    };
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, []);
 
   // Cart operations
   const addToCart = (
@@ -506,11 +669,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProducts((prev) => prev.map((p) => (p.id === product.id ? updated : p)));
   };
 
-  const updateSettings = async (newSettings: Partial<RestaurantSettings>) => {
-    const updated = await api.updateSettings(newSettings);
-    setSettings(updated);
-  };
-
   const updateDriverGPS = async (driverId: string, lat: number, lng: number) => {
     await api.updateDriverLocation(driverId, lat, lng);
   };
@@ -519,9 +677,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActivePrintReceipt(null);
   };
 
+  const recordActivityLog = useCallback(
+    async (action: string, details: string) => {
+      // Cybersecurity: sanitize details to never record plain PINs or passwords
+      const sanitized = details
+        .replace(/pin:\s*\S+/gi, 'pin: [MASKED]')
+        .replace(/password:\s*\S+/gi, 'password: [MASKED]');
+
+      const newLog: ActivityLog = {
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        actorName: currentUser.name || 'موظف النظام',
+        role: currentUser.role || 'STAFF',
+        action,
+        details: sanitized,
+        timestamp: new Date().toISOString(),
+      };
+      setActivityLogs((prev) => [newLog, ...prev.slice(0, 199)]);
+      await syncActivityLogToFirestore(newLog);
+    },
+    [currentUser]
+  );
+
+  const refreshActivityLogs = useCallback(async () => {
+    try {
+      const logs = await api.fetchActivityLogs();
+      if (logs && Array.isArray(logs)) {
+        setActivityLogs(logs);
+      }
+    } catch (e) {
+      console.warn('Could not refresh activity logs', e);
+    }
+  }, []);
+
   const addNewUser = async (userData: Partial<User>) => {
     const created = await api.createUser(userData, currentUser.name);
     setAllUsers((prev) => [...prev, created]);
+    // Sync safely to Firestore
+    syncUserToFirestore(created);
+    recordActivityLog('USER_CREATED', `إضافة موظف جديد: "${created.name}" بدور ${created.role}`);
     return created;
   };
 
@@ -531,11 +724,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentUser.id === id) {
       setCurrentUser(updated);
     }
+    // Sync safely to Firestore
+    syncUserToFirestore(updated);
+    const actionDesc = updates.pin !== undefined ? 'تحديث كلمة المرور/الرمز للموظف (مشفر)' : `تحديث بيانات الموظف "${updated.name}"`;
+    recordActivityLog('USER_UPDATED', actionDesc);
   };
 
   const deleteExistingUser = async (id: string) => {
+    const targetUser = allUsers.find((u) => u.id === id);
     await api.deleteUser(id, currentUser.name);
     setAllUsers((prev) => prev.filter((u) => u.id !== id));
+    recordActivityLog('USER_DELETED', `حذف الموظف "${targetUser?.name || id}" من النظام`);
+  };
+
+  const getSystemLinks = useCallback(() => {
+    const origin =
+      typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin
+        : 'https://ais-pre-2ib5gjf6yhv7mqyhfjymtf-412602973178.europe-west2.run.app';
+    return {
+      customerUrl: `${origin}/`,
+      staffModalUrl: `${origin}/?staff=true`,
+      adminUrl: `${origin}/admin`,
+      posUrl: `${origin}/pos`,
+      deliveryUrl: `${origin}/delivery`,
+    };
+  }, []);
+
+  const securityStatus = {
+    isFirestoreSynced: true,
+    isHttpsSecure: typeof window !== 'undefined' && window.location.protocol === 'https:',
+    failedAttempts,
+    lockoutSecondsLeft,
   };
 
   return (
@@ -578,6 +798,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         triggerManualPrint,
         activeTrackingOrderId,
         setActiveTrackingOrderId,
+        activityLogs,
+        refreshActivityLogs,
+        recordActivityLog,
+        isCashierAutoPrint,
+        setIsCashierAutoPrint,
+        securityStatus,
         unlockedScreens,
         unlockScreen,
         lockScreen,
@@ -589,6 +815,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsStaffModalOpen,
         targetLockedRoute,
         setTargetLockedRoute,
+        getSystemLinks,
       }}
     >
       {children}

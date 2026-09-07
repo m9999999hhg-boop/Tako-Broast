@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Product } from '../types';
 import { ProductModal } from '../components/ProductModal';
 import { CheckoutDrawer } from '../components/CheckoutDrawer';
+import { RestaurantGpsSection } from '../components/RestaurantGpsSection';
 import { OrderTrackingView } from './OrderTrackingView';
 import {
   Search,
@@ -16,6 +17,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Star,
+  Navigation,
+  Compass,
 } from 'lucide-react';
 
 export const WebsiteView: React.FC = () => {
@@ -27,6 +30,7 @@ export const WebsiteView: React.FC = () => {
     activeTrackingOrderId,
     setActiveTrackingOrderId,
     settings,
+    setIsStaffModalOpen,
   } = useApp();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -78,7 +82,7 @@ export const WebsiteView: React.FC = () => {
               استمتع بأشهى وجبات البروست المقرمش الطازجة يومياً، برجر اللحم البقري الصافي المشوي على اللهب، وساندوتشات التاكو المميزة. توصيل سريع ومباشر لباب منزلك!
             </p>
 
-            <div className="pt-2 flex flex-wrap items-center gap-4">
+            <div className="pt-2 flex flex-wrap items-center gap-3">
               <a
                 href="#menu"
                 className="bg-[#FF6321] hover:bg-[#e85516] text-white font-bold px-6 py-3 rounded-xl shadow-sm transition active:scale-95 flex items-center gap-2 text-sm"
@@ -88,8 +92,16 @@ export const WebsiteView: React.FC = () => {
               </a>
 
               <a
+                href="#restaurant-gps"
+                className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-5 py-3 rounded-xl border border-slate-700 transition flex items-center gap-2 text-sm cursor-pointer"
+              >
+                <Navigation className="w-4 h-4 text-[#FF6321]" />
+                <span>موقعنا على الـ GPS</span>
+              </a>
+
+              <a
                 href="tel:01036130204"
-                className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-5 py-3 rounded-xl border border-slate-700 transition flex items-center gap-2 text-sm"
+                className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-3 rounded-xl border border-slate-700 transition flex items-center gap-2 text-sm"
               >
                 <Phone className="w-4 h-4 text-[#FF6321]" />
                 <span dir="ltr">01036130204</span>
@@ -342,6 +354,9 @@ export const WebsiteView: React.FC = () => {
             </div>
           )}
         </section>
+
+        {/* Restaurant GPS & Exact Location Section */}
+        <RestaurantGpsSection />
       </main>
 
       {/* Floating Cart Button */}

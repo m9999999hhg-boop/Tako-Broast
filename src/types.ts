@@ -1,4 +1,4 @@
-export type Role = 'SUPER_ADMIN' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'DELIVERY';
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'CASHIER' | 'DELIVERY';
 
 export interface User {
   id: string;
@@ -9,6 +9,7 @@ export interface User {
   avatar?: string;
   branch?: string;
   active: boolean;
+  pin?: string;
 }
 
 export interface Customer {

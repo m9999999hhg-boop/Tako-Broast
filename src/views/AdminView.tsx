@@ -30,9 +30,11 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { AdminStaffManagement } from '../components/AdminStaffManagement';
+import { AdminDailySalesReport } from '../components/AdminDailySalesReport';
 
 type AdminTab =
   | 'overview'
+  | 'reports'
   | 'products'
   | 'orders'
   | 'customers'
@@ -180,6 +182,7 @@ export const AdminView: React.FC = () => {
         <nav className="space-y-1">
           {[
             { id: 'overview', label: 'لوحة التحكم والأرباح', icon: <BarChart3 className="w-4 h-4" /> },
+            { id: 'reports', label: 'تقارير المبيعات والذروة', icon: <TrendingUp className="w-4 h-4 text-[#FF6321]" /> },
             { id: 'products', label: 'قائمة الطعام والوجبات', icon: <Package className="w-4 h-4" /> },
             { id: 'orders', label: 'إدارة الطلبات والعمليات', icon: <ShoppingBag className="w-4 h-4" /> },
             { id: 'customers', label: 'سجل وبيانات العملاء', icon: <Users className="w-4 h-4" /> },
@@ -261,6 +264,30 @@ export const AdminView: React.FC = () => {
                   <span>بعد خصم التكاليف والمصروفات</span>
                 </div>
               </div>
+            </div>
+
+            {/* Quick Access to Daily Sales & Peak Rush Analysis */}
+            <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 rounded-2xl p-5 text-white shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="space-y-1 text-right">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-white/20 text-white">
+                    <TrendingUp className="w-5 h-5" />
+                  </span>
+                  <h3 className="font-black text-base text-white">
+                    تقارير المبيعات اليومية وتحليل أوقات وساعات الذروة (Daily Sales & Peak Hours)
+                  </h3>
+                </div>
+                <p className="text-xs text-orange-100 max-w-xl">
+                  رسوم بيانية تفاعلية متقدمة لتحليل ساعات الضغط والذروة، تصنيف الأطباق الأكثر طلباً حسب الكمية وقيمة الإيرادات، مع إمكانية طباعة تقرير الإقفال اليومي (Z-Report).
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab('reports')}
+                className="shrink-0 px-5 py-2.5 rounded-xl bg-white text-orange-600 hover:bg-orange-50 font-black text-xs transition shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>فتح تقارير المبيعات والذروة الآن</span>
+                <BarChart3 className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Split layout: Recent Activity Real-Time Table & Thermal Print Queue / Top Items */}
@@ -427,6 +454,9 @@ export const AdminView: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* TAB: Daily Sales & Peak Hours Reports */}
+        {activeTab === 'reports' && <AdminDailySalesReport />}
 
         {/* TAB 2: Products & Menu Management */}
         {activeTab === 'products' && (

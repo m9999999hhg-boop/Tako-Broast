@@ -9,7 +9,7 @@ import { AdminView } from './views/AdminView';
 import { CheckoutDrawer } from './components/CheckoutDrawer';
 import { ScreenLockGate } from './components/ScreenLockGate';
 import { StaffPortalModal } from './components/StaffPortalModal';
-import { Lock } from 'lucide-react';
+import { Lock, ShieldCheck, UserCheck } from 'lucide-react';
 
 function AppContent() {
   const {
@@ -56,8 +56,8 @@ function AppContent() {
       <div className="flex-1">{renderScreenContent()}</div>
 
       {/* Professional Polish System Footer */}
-      <footer className="h-12 bg-white border-t border-slate-200 px-6 sm:px-8 flex flex-wrap items-center justify-between text-[11px] text-slate-500 font-medium print:hidden">
-        <div className="flex items-center gap-4">
+      <footer className="py-2.5 bg-white border-t border-slate-200 px-4 sm:px-8 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 font-medium print:hidden">
+        <div className="flex flex-wrap items-center gap-4">
           <span>الخادم: 192.168.1.44</span>
           <span className="hidden sm:inline">الاستجابة: 24ms</span>
           <span className="flex items-center gap-1.5">
@@ -66,17 +66,15 @@ function AppContent() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-slate-400">&copy; 2024 TACO BROAST SYSTEM | ALL RIGHTS RESERVED</div>
-          {currentRoute === 'website' && (
-            <button
-              onClick={() => setIsStaffModalOpen(true)}
-              className="p-1 text-slate-300 hover:text-slate-600 opacity-25 hover:opacity-100 transition-opacity rounded cursor-pointer"
-              title="بوابة التشغيل الداخلي"
-              aria-label="Staff Access"
-            >
-              <Lock className="w-3 h-3" />
-            </button>
-          )}
+          <div className="text-slate-500 font-semibold">&copy; 2026 TACO BROAST SYSTEM | جميع الحقوق محفوظة</div>
+          <button
+            onClick={() => setIsStaffModalOpen(true)}
+            className="flex items-center gap-1.5 bg-slate-900 hover:bg-[#FF6321] text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer active:scale-95 border border-slate-700"
+            title="بوابة دخول الموظفين (كاشير، إدارة، توصيل)"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-[#FF6321]" />
+            <span>دخول الموظفين</span>
+          </button>
         </div>
       </footer>
 
